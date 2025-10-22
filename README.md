@@ -72,7 +72,7 @@ const johnDoes = await handler.query("users").where("name", "John").execute();
 // Range queries
 const adults = await handler
   .query("users")
-  .range(IDBKeyRange.lowerBound(18))
+  .where("age", { gte: 18 })
   .execute();
 ```
 
@@ -107,11 +107,28 @@ interface IndexedDBTableSchema<Key, Value> {
 ### Query Builder Methods
 
 - `where(indexName, value)`: Filter by index
-- `range(IDBKeyRange)`: Filter by key range
 - `orderBy(key, direction?)`: Sort results
 - `limit(count)`: Limit result count
 - `offset(count)`: Skip initial results
 - `execute()`: Execute query and return results
+
+### Helpers
+
+- `createKeyRange(options)`: Available for custom IndexedDB range scenarios; `where()` also accepts range descriptors like `{ gte, lt }` or `{ between: [lower, upper] }` for common cases.
+
+## Development
+
+Install dependencies and run the Bun-based workflow:
+
+```bash
+bun install
+bun run build
+bun run lint
+bun test
+bun run format
+```
+
+The build emits both CommonJS (`dist/index.cjs`) and ES module (`dist/index.js`) bundles along with TypeScript declarations in `dist/index.d.ts`. Run `bun run lint` before submitting changes; rely on `bun run format` for safe Biome autofixes.
 
 ## License
 
