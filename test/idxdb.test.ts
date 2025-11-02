@@ -379,4 +379,81 @@ describe("IdxDB", () => {
     expect(results).toHaveLength(2);
     expect(results).toEqual(expect.arrayContaining(records));
   });
+
+  test("should rebuild stores when schema changes", async () => {
+    const dbName = "schema-change-db";
+
+    const cleanup = async () => {
+      await new Promise<void>((resolve) => {
+        const request = indexedDB.deleteDatabase(dbName);
+        request.onsuccess = () => resolve();
+        request.onerror = () => resolve();
+        request.onblocked = () => resolve();
+      });
+    };
+
+    await cleanup();
+
+    const initialSchema = IdxDB.createSchema("users", {
+      value: {
+        id: "",
+        name: "",
+        status: "",
+      },
+      key: "id",
+      keyPath: "id",
+      indexes: [{ name: "name", keyPath: "name" }],
+    });
+
+    const v1Db = new IdxDB(initialSchema);
+    const v1Handler = await v1Db.open(dbName, 1);
+
+    await v1Handler.add({
+      tableName: "users",
+      data: {
+        id: "legacy",
+        name: "Legacy User",
+        status: "inactive",
+      },
+    });
+
+    v1Handler.close();
+
+    const updatedSchema = IdxDB.createSchema("users", {
+      value: {
+        id: "",
+        name: "",
+        status: "",
+      },
+      key: "id",
+      keyPath: "id",
+      indexes: [
+        { name: "name", keyPath: "name" },
+        { name: "status", keyPath: "status" },
+      ],
+    });
+
+    const v2Db = new IdxDB(updatedSchema);
+    const v2Handler = await v2Db.open(dbName, 2);
+
+    await v2Handler.add({
+      tableName: "users",
+      data: {
+        id: "active",
+        name: "Active User",
+        status: "active",
+      },
+    });
+
+    const statusResults = await v2Handler.query("users").where("status", "active").execute();
+    expect(statusResults).toHaveLength(1);
+    expect(statusResults[0].id).toBe("active");
+
+    const allRecords = await v2Handler.getAll({ tableName: "users" });
+    expect(allRecords).toHaveLength(1);
+    expect(allRecords[0].id).toBe("active");
+
+    v2Handler.close();
+    await cleanup();
+  });
 });
