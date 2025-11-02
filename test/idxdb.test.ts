@@ -229,4 +229,154 @@ describe("IdxDB", () => {
     expect(results).toHaveLength(1);
     expect(results[0]).toEqual(users[1]);
   });
+
+  test("should support like queries with prefix wildcards", async () => {
+    const users = [
+      {
+        id: "1",
+        name: "John",
+        age: 30,
+        status: "active",
+        createdAt: timestamp("2024-03-01T00:00:00Z"),
+      },
+      {
+        id: "2",
+        name: "Joanna",
+        age: 27,
+        status: "active",
+        createdAt: timestamp("2024-03-02T00:00:00Z"),
+      },
+      {
+        id: "3",
+        name: "Alice",
+        age: 24,
+        status: "inactive",
+        createdAt: timestamp("2024-03-03T00:00:00Z"),
+      },
+    ];
+
+    for (const user of users) {
+      await handler.add({
+        tableName: "users",
+        data: user,
+      });
+    }
+
+    const results = await handler
+      .query("users")
+      .where("name", { like: "Jo%" })
+      .execute();
+
+    expect(results).toHaveLength(2);
+    expect(results).toEqual(expect.arrayContaining([users[0], users[1]]));
+  });
+
+  test("should support like queries with partial wildcards", async () => {
+    const users = [
+      {
+        id: "1",
+        name: "Hannah",
+        age: 29,
+        status: "active",
+        createdAt: timestamp("2024-03-05T00:00:00Z"),
+      },
+      {
+        id: "2",
+        name: "Jane",
+        age: 32,
+        status: "active",
+        createdAt: timestamp("2024-03-06T00:00:00Z"),
+      },
+      {
+        id: "3",
+        name: "Mike",
+        age: 31,
+        status: "inactive",
+        createdAt: timestamp("2024-03-07T00:00:00Z"),
+      },
+    ];
+
+    for (const user of users) {
+      await handler.add({
+        tableName: "users",
+        data: user,
+      });
+    }
+
+    const results = await handler
+      .query("users")
+      .where("name", { like: "%an%" })
+      .execute();
+
+    expect(results).toHaveLength(2);
+    expect(results).toEqual(expect.arrayContaining([users[0], users[1]]));
+  });
+
+  test("should default to case-sensitive like queries", async () => {
+    const records = [
+      {
+        id: "1",
+        name: "Alpha",
+        age: 40,
+        status: "active",
+        createdAt: timestamp("2024-03-08T00:00:00Z"),
+      },
+      {
+        id: "2",
+        name: "alpha",
+        age: 41,
+        status: "inactive",
+        createdAt: timestamp("2024-03-09T00:00:00Z"),
+      },
+    ];
+
+    for (const record of records) {
+      await handler.add({
+        tableName: "users",
+        data: record,
+      });
+    }
+
+    const results = await handler
+      .query("users")
+      .where("name", { like: "Al%" })
+      .execute();
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual(records[0]);
+  });
+
+  test("should support case-insensitive like queries", async () => {
+    const records = [
+      {
+        id: "1",
+        name: "Bravo",
+        age: 36,
+        status: "active",
+        createdAt: timestamp("2024-03-10T00:00:00Z"),
+      },
+      {
+        id: "2",
+        name: "bravo",
+        age: 37,
+        status: "inactive",
+        createdAt: timestamp("2024-03-11T00:00:00Z"),
+      },
+    ];
+
+    for (const record of records) {
+      await handler.add({
+        tableName: "users",
+        data: record,
+      });
+    }
+
+    const results = await handler
+      .query("users")
+      .where("name", { like: "Br%", caseInsensitive: true })
+      .execute();
+
+    expect(results).toHaveLength(2);
+    expect(results).toEqual(expect.arrayContaining(records));
+  });
 });

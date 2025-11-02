@@ -68,11 +68,21 @@ type RangeDescriptor<Key extends IDBValidKey> =
       lt?: Key;
     };
 
+type LikeOperandValue = {
+  like: string;
+  caseInsensitive?: boolean;
+};
+
+type LikeDescriptor<Value, Field extends keyof Value> = Value[Field] extends string
+  ? LikeOperandValue
+  : never;
+
 type WhereOperand<Value, Field extends keyof Value> =
   | IndexFieldValue<Value, Field>
   | (IndexFieldValue<Value, Field> extends IDBValidKey
       ? RangeDescriptor<IndexFieldValue<Value, Field>>
-      : never);
+      : never)
+  | LikeDescriptor<Value, Field>;
 
 const isRangeDescriptor = (value: unknown): value is RangeDescriptor<IDBValidKey> => {
   if (value === null || typeof value !== "object") {
@@ -87,6 +97,58 @@ const isRangeDescriptor = (value: unknown): value is RangeDescriptor<IDBValidKey
     descriptor.lte !== undefined ||
     descriptor.lt !== undefined
   );
+};
+
+const isLikeDescriptor = (value: unknown): value is LikeOperandValue => {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+
+  return typeof (value as { like?: unknown }).like === "string";
+};
+
+const escapeRegex = (input: string) => input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+type LikeMatcher = {
+  range?: IDBKeyRange;
+  test(candidate: string): boolean;
+};
+
+const createLikeMatcher = (pattern: string, caseInsensitive: boolean): LikeMatcher => {
+  const hasPercent = pattern.includes("%");
+  const hasUnderscore = pattern.includes("_");
+
+  if (!caseInsensitive && !hasPercent && !hasUnderscore) {
+    return {
+      range: IDBKeyRange.only(pattern),
+      test: (value) => value === pattern,
+    };
+  }
+
+  if (
+    !caseInsensitive &&
+    !hasUnderscore &&
+    hasPercent &&
+    pattern.endsWith("%") &&
+    pattern.indexOf("%") === pattern.length - 1
+  ) {
+    const prefix = pattern.slice(0, -1);
+    const upperBound = `${prefix}\uffff`;
+
+    return {
+      range: IDBKeyRange.bound(prefix, upperBound, false, false),
+      test: (value) => value.startsWith(prefix),
+    };
+  }
+
+  const regexPattern = `^${escapeRegex(pattern).replace(/%/g, ".*").replace(/_/g, ".")}$`;
+
+  const flags = caseInsensitive ? "i" : "";
+  const regex = new RegExp(regexPattern, flags);
+
+  return {
+    test: (value) => regex.test(value),
+  };
 };
 
 const toKeyRange = <Key extends IDBValidKey>(descriptor: RangeDescriptor<Key>) => {
@@ -326,6 +388,26 @@ class QueryBuilder<T extends TableSchemas, K extends keyof T> {
     this.filters.push((store) => {
       const index = store.index(String(indexName));
       return new Promise((resolve, reject) => {
+        if (isLikeDescriptor(value)) {
+          const descriptor = value;
+          try {
+            const matcher = createLikeMatcher(descriptor.like, descriptor.caseInsensitive ?? false);
+            const request = matcher.range ? index.getAll(matcher.range) : index.getAll();
+            request.onsuccess = () => {
+              const records = request.result as T[K]["value"][];
+              const filtered = records.filter((record) => {
+                const fieldValue = (record as Record<string, unknown>)[indexName as string];
+                return typeof fieldValue === "string" && matcher.test(fieldValue);
+              });
+              resolve(filtered);
+            };
+            request.onerror = () => reject(request.error);
+          } catch (error) {
+            reject(error);
+          }
+          return;
+        }
+
         const operand = isRangeDescriptor(value)
           ? toKeyRange(value as RangeDescriptor<IDBValidKey>)
           : value;
