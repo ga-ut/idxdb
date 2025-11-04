@@ -262,10 +262,7 @@ describe("IdxDB", () => {
       });
     }
 
-    const results = await handler
-      .query("users")
-      .where("name", { like: "Jo%" })
-      .execute();
+    const results = await handler.query("users").where("name", { like: "Jo%" }).execute();
 
     expect(results).toHaveLength(2);
     expect(results).toEqual(expect.arrayContaining([users[0], users[1]]));
@@ -303,10 +300,7 @@ describe("IdxDB", () => {
       });
     }
 
-    const results = await handler
-      .query("users")
-      .where("name", { like: "%an%" })
-      .execute();
+    const results = await handler.query("users").where("name", { like: "%an%" }).execute();
 
     expect(results).toHaveLength(2);
     expect(results).toEqual(expect.arrayContaining([users[0], users[1]]));
@@ -337,10 +331,7 @@ describe("IdxDB", () => {
       });
     }
 
-    const results = await handler
-      .query("users")
-      .where("name", { like: "Al%" })
-      .execute();
+    const results = await handler.query("users").where("name", { like: "Al%" }).execute();
 
     expect(results).toHaveLength(1);
     expect(results[0]).toEqual(records[0]);
